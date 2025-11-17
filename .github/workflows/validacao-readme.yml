@@ -1,0 +1,61 @@
+name: Validar README
+
+on:
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  validar-readme:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout do código
+        uses: actions/checkout@v3
+
+      - name: 🔍 Verificar existência do README.md
+        run: |
+          if [ ! -f "README.md" ]; then
+            echo "❌ O arquivo README.md não foi encontrado."
+            exit 1
+          fi
+
+      - name: 📑 Validando se todas as seções obrigatórias existem
+        run: |
+          REQUIRED_SECTIONS=(
+            "# " # título obrigatório
+            "Descrição"
+            "Tecnologias Utilizadas"
+            "Instalação"
+            "Como Usar"
+            "Estrutura de Pastas"
+            "Contribuição"
+            "Licença"
+          )
+
+          MISSING=false
+
+          echo "🔎 Verificando seções necessárias..."
+
+          for section in "${REQUIRED_SECTIONS[@]}"; do
+            if ! grep -qi "$section" README.md; then
+              echo "❌ Seção faltando: $section"
+              MISSING=true
+            else
+              echo "✔ Seção encontrada: $section"
+            fi
+          done
+
+          if [ "$MISSING" = true ]; then
+            echo ""
+            echo "❌ Algumas seções obrigatórias estão faltando no README."
+            echo "Por favor, adicione as seções e envie novamente."
+            exit 1
+          else
+            echo ""
+            echo "🎉 Todas as seções obrigatórias estão presentes!"
+          fi
+
+      - name: 🟢 Ação finalizada
+        run: |
+          echo "Validação concluída com sucesso."
