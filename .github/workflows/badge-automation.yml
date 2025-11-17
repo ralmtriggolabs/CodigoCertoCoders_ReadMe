@@ -1,0 +1,113 @@
+name: Registrar Badges e Criar Certificados
+
+on:
+  pull_request:
+    types: [closed]
+
+jobs:
+  process-badge:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v3
+
+      - name: 🧰 Instalar Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: 📦 Instalar dependências
+        run: |
+          npm install svg-builder@0.0.3
+
+      - name: 📝 Criar script de automação
+        run: |
+          cat << 'EOF' > process.js
+          const fs = require('fs');
+          const builder = require('svg-builder');
+
+          const badgeType = process.env.BADGE_TYPE;
+          const githubUser = process.env.PR_USER;
+          const repository = process.env.REPO_URL;
+          const name = process.env.PR_USER; // Pode ser substituído por captura no PR
+          const date = new Date().toISOString().split('T')[0];
+
+          const badges = JSON.parse(fs.readFileSync('badges.json'));
+
+          // Atualizar JSON
+          if (badgeType === "mestre") {
+            badges.mestreDaDocumentacao.push({
+              githubUser, name, repository, date
+            });
+          } else {
+            badges.devApoiaDev.push({
+              githubUser, name, indicatedUser: "", indicatedRepository: "", date
+            });
+          }
+
+          fs.writeFileSync('badges.json', JSON.stringify(badges, null, 2));
+
+          // Criar badge SVG
+          const svg = builder
+            .width(420)
+            .height(100)
+            .rect({ width: 420, height: 100, fill: "#1e1e1e", rx: 12 })
+            .text({
+              x: 210,
+              y: 55,
+              "text-anchor": "middle",
+              fill: "white",
+              "font-size": 20
+            }, badgeType === "mestre" ? "Mestre da Documentação" : "Dev que Apoia Dev")
+            .render();
+
+          fs.writeFileSync(`badges/${githubUser}-${badgeType}.svg`, svg);
+
+          // Criar certificado individual
+          const tplPath =
+            badgeType === "mestre"
+            ? "templates/MestreDaDocumentacao.md"
+            : "templates/DevApoiaDev.md";
+
+          let template = fs.readFileSync(tplPath, "utf8");
+
+          template = template
+            .replace(/{{githubUser}}/g, githubUser)
+            .replace(/{{name}}/g, name)
+            .replace(/{{repository}}/g, repository)
+            .replace(/{{date}}/g, date)
+            .replace(/{{indicatedUser}}/g, "N/A")
+            .replace(/{{indicatedRepository}}/g, "N/A");
+
+          const certFilename =
+            badgeType === "mestre"
+            ? `certificados/${githubUser}-MestreDaDocumentacao.md`
+            : `certificados/${githubUser}-DevApoiaDev.md`;
+
+          fs.writeFileSync(certFilename, template);
+          EOF
+
+      - name: 🧠 Identificar tipo de badge pela branch
+        run: |
+          if [[ "${GITHUB_HEAD_REF}" == *"mestre"* ]]; then
+            echo "BADGE_TYPE=mestre" >> $GITHUB_ENV
+          else
+            echo "BADGE_TYPE=apoia" >> $GITHUB_ENV
+          fi
+
+      - name: 🚀 Executar automação
+        env:
+          PR_USER: ${{ github.actor }}
+          BADGE_TYPE: ${{ env.BADGE_TYPE }}
+          REPO_URL: ${{ github.event.pull_request.head.repo.html_url }}
+        run: node process.js
+
+      - name: 💾 Commit automático
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add badges.json badges/ certificados/
+          git commit -m "Certificado e badge criados para ${{ github.actor }}"
+          git push
