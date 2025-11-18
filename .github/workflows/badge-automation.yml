@@ -56,11 +56,10 @@ jobs:
           REPO_URL: ${{ github.event.pull_request.head.repo.html_url }}
         run: node process.js
 
-      - name: 📬 Subir arquivos via API (compatível com fork)
-        uses: peter-evans/create-pull-request@v6
+      - name: 📬 Forçar site.yml
+        uses: peter-evans/repository-dispatch@v2
         with:
-          commit-message: "Badge e certificado gerados para ${{ github.actor }}"
-          branch: "auto-badges/${{ github.actor }}"
-          base: ${{ github.event.pull_request.head.ref }}
-          title: "Atualização automática de badges"
           token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          event-type: trigger-github-pages-update
+        
