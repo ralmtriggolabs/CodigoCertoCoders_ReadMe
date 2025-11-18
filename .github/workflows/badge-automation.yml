@@ -56,10 +56,4 @@ jobs:
           REPO_URL: ${{ github.event.pull_request.head.repo.html_url }}
         run: node process.js
 
-      - name: 📬 Forçar site.yml
-        uses: peter-evans/repository-dispatch@v2
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          repository: ${{ github.repository }}
-          event-type: trigger-github-pages-update
-        
+      
