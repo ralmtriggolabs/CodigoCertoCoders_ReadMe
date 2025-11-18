@@ -13,127 +13,204 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-
       - name: 📥 Checkout
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: 🧰 Instalar Node
         uses: actions/setup-node@v4
         with:
           node-version: 18
 
-      - name: 📝 Criar script de automação
-        run: |
-          mkdir -p badges certificados
-
-          cat << 'EOF' > process.js
-          const fs = require('fs');
-
-          // Garantir estrutura inicial do badges.json
-          function loadBadges() {
-            try {
-              const raw = fs.readFileSync('badges.json', 'utf8').trim();
-              if (!raw) throw new Error("Empty JSON");
-              return JSON.parse(raw);
-            } catch (err) {
-              const defaultData = {
-                mestreDaDocumentacao: [],
-                devApoiaDev: []
-              };
-              fs.writeFileSync('badges.json', JSON.stringify(defaultData, null, 2));
-              return defaultData;
-            }
-          }
-
-          const badgeType = process.env.BADGE_TYPE; 
-          const githubUser = process.env.PR_USER;
-          const repository = process.env.REPO_URL;
-          const name = githubUser;
-          const date = new Date().toISOString().split('T')[0];
-
-          const badges = loadBadges();
-
-          if (badgeType === "mestre") {
-            badges.mestreDaDocumentacao.push({ githubUser, name, repository, date });
-          } else {
-            badges.devApoiaDev.push({ githubUser, name, repository, date });
-          }
-
-          fs.writeFileSync('badges.json', JSON.stringify(badges, null, 2));
-
-          // Criar badge SVG sem template strings
-          const badgeLabel = badgeType === "mestre"
-            ? "Mestre da Documentação"
-            : "Dev que Apoia Dev";
-
-          const svg =
-            '<svg width="420" height="100" xmlns="http://www.w3.org/2000/svg">' +
-            '<rect width="420" height="100" fill="#1e1e1e" rx="12"></rect>' +
-            '<text x="210" y="55" font-size="20" fill="white" font-family="Arial, sans-serif" text-anchor="middle" alignment-baseline="middle">' +
-            badgeLabel +
-            '</text></svg>';
-
-          const svgFilename = 'badges/' + githubUser + '-' + badgeType + '.svg';
-          fs.writeFileSync(svgFilename, svg);
-
-          // Criar certificado .md
-          const tplPath =
-            badgeType === "mestre"
-              ? "templates/MestreDaDocumentacao.md"
-              : "templates/DevApoiaDev.md";
-
-          let template = fs.readFileSync(tplPath, "utf8");
-
-          template = template
-            .replace(/{{githubUser}}/g, githubUser)
-            .replace(/{{name}}/g, name)
-            .replace(/{{repository}}/g, repository)
-            .replace(/{{date}}/g, date);
-
-          const certFilename =
-            'certificados/' +
-            githubUser +
-            (badgeType === "mestre"
-              ? '-MestreDaDocumentacao.md'
-              : '-DevApoiaDev.md');
-
-          fs.writeFileSync(certFilename, template);
-
-          EOF
-
-
       - name: 🧠 Identificar tipo de badge pelo título do PR
+        id: badge-detector
         run: |
           TITLE="${{ github.event.pull_request.title }}"
           echo "Título detectado: $TITLE"
 
           if [[ "$TITLE" == *"[mestre]"* ]]; then
             echo "BADGE_TYPE=mestre" >> $GITHUB_ENV
+            echo "badge_type=mestre" >> $GITHUB_OUTPUT
           elif [[ "$TITLE" == *"[apoia]"* ]]; then
             echo "BADGE_TYPE=apoia" >> $GITHUB_ENV
+            echo "badge_type=apoia" >> $GITHUB_OUTPUT
           else
             echo "❌ ERRO: O PR precisa conter [mestre] ou [apoia] no título."
             exit 1
           fi
 
+      - name: 📝 Criar script de automação
+        run: |
+          mkdir -p badges certificados templates
+
+          # Criar templates se não existirem
+          if [ ! -f "templates/MestreDaDocumentacao.md" ]; then
+            mkdir -p templates
+            cat > templates/MestreDaDocumentacao.md << 'TEMPLATE'
+          # Certificado Mestre da Documentação
+          
+          **Usuário:** {{githubUser}}
+          **Nome:** {{name}}
+          **Repositório:** {{repository}}
+          **Data:** {{date}}
+          
+          Parabéns por contribuir com a documentação!
+          TEMPLATE
+          fi
+
+          if [ ! -f "templates/DevApoiaDev.md" ]; then
+            cat > templates/DevApoiaDev.md << 'TEMPLATE'
+          # Certificado Dev que Apoia Dev
+          
+          **Usuário:** {{githubUser}}
+          **Nome:** {{name}}
+          **Repositório:** {{repository}}
+          **Data:** {{date}}
+          
+          Obrigado por apoiar outros desenvolvedores!
+          TEMPLATE
+          fi
+
+          cat << 'EOF' > process.js
+          const fs = require('fs');
+          const path = require('path');
+
+          // Garantir que diretórios existam
+          function ensureDirectories() {
+            const dirs = ['badges', 'certificados', 'templates'];
+            dirs.forEach(dir => {
+              if (!fs.existsSync(dir)) {
+                fs.mkdirSync(dir, { recursive: true });
+              }
+            });
+          }
+
+          // Garantir estrutura inicial do badges.json
+          function loadBadges() {
+            try {
+              if (fs.existsSync('badges.json')) {
+                const raw = fs.readFileSync('badges.json', 'utf8').trim();
+                if (raw) {
+                  return JSON.parse(raw);
+                }
+              }
+            } catch (err) {
+              console.log('Erro ao ler badges.json, criando novo:', err.message);
+            }
+            
+            const defaultData = {
+              mestreDaDocumentacao: [],
+              devApoiaDev: []
+            };
+            fs.writeFileSync('badges.json', JSON.stringify(defaultData, null, 2));
+            return defaultData;
+          }
+
+          function main() {
+            ensureDirectories();
+            
+            const badgeType = process.env.BADGE_TYPE; 
+            const githubUser = process.env.PR_USER;
+            const repository = process.env.REPO_URL;
+            const name = githubUser;
+            const date = new Date().toISOString().split('T')[0];
+
+            console.log(`Processando badge: ${badgeType} para ${githubUser}`);
+
+            const badges = loadBadges();
+
+            // Verificar se usuário já tem o badge
+            const badgeList = badgeType === "mestre" ? badges.mestreDaDocumentacao : badges.devApoiaDev;
+            const alreadyHasBadge = badgeList.some(entry => entry.githubUser === githubUser);
+            
+            if (!alreadyHasBadge) {
+              if (badgeType === "mestre") {
+                badges.mestreDaDocumentacao.push({ githubUser, name, repository, date });
+              } else {
+                badges.devApoiaDev.push({ githubUser, name, repository, date });
+              }
+
+              fs.writeFileSync('badges.json', JSON.stringify(badges, null, 2));
+              console.log('Badge registrado com sucesso!');
+            } else {
+              console.log('Usuário já possui este badge');
+            }
+
+            // Criar badge SVG
+            const badgeLabel = badgeType === "mestre"
+              ? "Mestre da Documentação"
+              : "Dev que Apoia Dev";
+
+            const svgContent = 
+              '<svg width="420" height="100" xmlns="http://www.w3.org/2000/svg">' +
+              '<rect width="420" height="100" fill="#1e1e1e" rx="12"></rect>' +
+              '<text x="210" y="55" font-size="20" fill="white" font-family="Arial, sans-serif" text-anchor="middle" alignment-baseline="middle">' +
+              badgeLabel +
+              '</text></svg>';
+
+            const svgFilename = `badges/${githubUser}-${badgeType}.svg`;
+            fs.writeFileSync(svgFilename, svgContent);
+            console.log(`Badge SVG criado: ${svgFilename}`);
+
+            // Criar certificado .md
+            const tplPath = badgeType === "mestre"
+              ? "templates/MestreDaDocumentacao.md"
+              : "templates/DevApoiaDev.md";
+
+            if (fs.existsSync(tplPath)) {
+              let template = fs.readFileSync(tplPath, "utf8");
+
+              template = template
+                .replace(/{{githubUser}}/g, githubUser)
+                .replace(/{{name}}/g, name)
+                .replace(/{{repository}}/g, repository)
+                .replace(/{{date}}/g, date);
+
+              const certFilename = `certificados/${githubUser}-${badgeType === "mestre" ? 'MestreDaDocumentacao' : 'DevApoiaDev'}.md`;
+              
+              fs.writeFileSync(certFilename, template);
+              console.log(`Certificado criado: ${certFilename}`);
+            } else {
+              console.warn(`Template não encontrado: ${tplPath}`);
+            }
+          }
+
+          main();
+          EOF
+
       - name: 🚀 Executar automação
         env:
           PR_USER: ${{ github.actor }}
           BADGE_TYPE: ${{ env.BADGE_TYPE }}
-          REPO_URL: ${{ github.event.pull_request.head.repo.html_url }}
+          REPO_URL: ${{ github.event.repository.html_url }}
         run: node process.js
 
       - name: 💾 Commit automático
+        id: commit-changes
         run: |
-          git config user.name "github-actions"
-          git config user.email "actions@github.com"
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Verificar se há mudanças
           git add badges.json badges/ certificados/
-          git commit -m "Badge e certificado criados automaticamente para ${{ github.actor }}" || echo "Nenhuma alteração para commit"
-          git push
+          
+          if git diff --staged --quiet; then
+            echo "changes=false" >> $GITHUB_OUTPUT
+            echo "⚠️ Nenhuma alteração para commitar"
+          else
+            echo "changes=true" >> $GITHUB_OUTPUT
+            git commit -m "🎉 Badge e certificado criados para ${{ github.actor }} [skip ci]"
+            git push
+            echo "✅ Alterações commitadas e pushedas"
+          fi
 
-      - name: 🔁 AutoMerge PR
+      - name: 🔁 AutoMerge PR (Opcional)
+        if: steps.commit-changes.outputs.changes == 'true'
         uses: pascalgn/automerge-action@v0.16.3
+        with:
+          merge-method: squash
+          pull-request-filter: "labeled:automerge"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
