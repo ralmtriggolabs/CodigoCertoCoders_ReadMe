@@ -132,7 +132,66 @@ Pronto(a)?
 Agora é só partir para a ação.  
 Boa sorte, e que vença o(a) mais organizado(a)! 😄💙
 
+## 🏅 Como o badge é gerado automaticamente?
+
+Para garantir simplicidade máxima, o sistema de badges funciona baseado **somente no título do Pull Request**.
+
+### 📌 **Para receber o badge “Mestre da Documentação”**
+
+Abra um Pull Request com o título:
+
+```
+[mestre] Entrega do Desafio 48h
+```
+
+### 📌 **Para receber o badge “Dev que Apoia Dev”**
+
+Quando você indicar alguém que completar o desafio, abra um PR com:
+
+```
+[apoia] Indicação do usuário X
+```
+
+---
+
+## ⚙️ O que acontece automaticamente?
+
+Assim que você abre o PR:
+
+1. O GitHub Actions identifica o tipo de badge pelo título
+2. Valida os arquivos necessários
+3. Atualiza o arquivo `badges.json`
+4. Gera automaticamente:
+
+   * 🏅 Um **badge SVG** exclusivo com seu nome
+   * 📜 Um **certificado .md personalizado**
+5. Faz commit automático no repositório
+6. Faz **AutoMerge** do PR
+
+---
+
+## ❗ Regras importantes
+
+* **Sem “[mestre]” ou “[apoia]” no título, o PR é rejeitado automaticamente**
+* Não é necessário criar branch específica
+* Não precisa rodar nada manualmente
+* Tudo acontece sozinho através da automação
+
+---
+
+## 🎉 Pronto!
+
+Seu badge estará disponível dentro da pasta:
+
+```
+/badges
+```
+
+E seu certificado em:
+
+```
+/certificados
+```
 
 ## Lista de Participantes:
-🏅 Certificados da Comunidade – Código Certo Coders
-(https://robsonamendonca.github.io/CodigoCertoCoders_ReadMe/)
+[🏅 Certificados da Comunidade – Código Certo Coders](https://robsonamendonca.github.io/CodigoCertoCoders_ReadMe/)
