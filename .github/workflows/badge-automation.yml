@@ -31,48 +31,87 @@ jobs:
           cat << 'EOF' > process.js
           const fs = require('fs');
           const builder = require('svg-builder');
+
+          // Garantir estrutura inicial do badges.json
+          function loadBadges() {
+            try {
+              const raw = fs.readFileSync('badges.json', 'utf8').trim();
+
+              if (!raw) throw new Error("Empty file");
+
+              return JSON.parse(raw);
+
+            } catch (err) {
+              // Se der erro ou estiver vazio → recria o JSON
+              const defaultData = {
+                mestreDaDocumentacao: [],
+                devApoiaDev: []
+              };
+
+              fs.writeFileSync('badges.json', JSON.stringify(defaultData, null, 2));
+              return defaultData;
+            }
+          }
+
           const badgeType = process.env.BADGE_TYPE;
           const githubUser = process.env.PR_USER;
           const repository = process.env.REPO_URL;
           const name = githubUser;
           const date = new Date().toISOString().split('T')[0];
-          const badges = JSON.parse(fs.readFileSync('badges.json'));
 
+          // Carregar JSON seguro
+          const badges = loadBadges();
+
+          // Atualizar JSON com o novo registro
           if (badgeType === "mestre") {
-            badges.mestreDaDocumentacao.push({ githubUser, name, repository, date });
+            badges.mestreDaDocumentacao.push({
+              githubUser, name, repository, date
+            });
           } else {
-            badges.devApoiaDev.push({ githubUser, name, date });
+            badges.devApoiaDev.push({
+              githubUser, name, date
+            });
           }
 
           fs.writeFileSync('badges.json', JSON.stringify(badges, null, 2));
 
+          // Criar badge SVG
           const svg = builder
             .width(420)
             .height(100)
             .rect({ width: 420, height: 100, fill: "#1e1e1e", rx: 12 })
-            .text({ x: 210, y: 55, "text-anchor": "middle", fill: "white", "font-size": 20 },
-              badgeType === "mestre" ? "Mestre da Documentação" : "Dev que Apoia Dev"
-            )
+            .text({
+              x: 210,
+              y: 55,
+              "text-anchor": "middle",
+              fill: "white",
+              "font-size": 20
+            }, badgeType === "mestre" ? "Mestre da Documentação" : "Dev que Apoia Dev")
             .render();
 
           fs.writeFileSync(`badges/${githubUser}-${badgeType}.svg`, svg);
 
-          const tplPath = badgeType === "mestre"
-            ? "templates/MestreDaDocumentacao.md"
-            : "templates/DevApoiaDev.md";
+          // Criar certificado individual
+          const tplPath =
+            badgeType === "mestre"
+              ? "templates/MestreDaDocumentacao.md"
+              : "templates/DevApoiaDev.md";
 
           let template = fs.readFileSync(tplPath, "utf8");
+
           template = template
             .replace(/{{githubUser}}/g, githubUser)
             .replace(/{{name}}/g, name)
             .replace(/{{repository}}/g, repository)
             .replace(/{{date}}/g, date);
 
-          const certFilename = badgeType === "mestre"
-            ? `certificados/${githubUser}-MestreDaDocumentacao.md`
-            : `certificados/${githubUser}-DevApoiaDev.md`;
+          const certFilename =
+            badgeType === "mestre"
+              ? `certificados/${githubUser}-MestreDaDocumentacao.md`
+              : `certificados/${githubUser}-DevApoiaDev.md`;
 
           fs.writeFileSync(certFilename, template);
+
           EOF
 
       - name: 🧠 Identificar tipo de badge pela branch
