@@ -133,3 +133,6 @@ Agora é só partir para a ação.
 Boa sorte, e que vença o(a) mais organizado(a)! 😄💙
 
 
+## Lista de Participantes:
+🏅 Certificados da Comunidade – Código Certo Coders
+(https://robsonamendonca.github.io/CodigoCertoCoders_ReadMe/)
