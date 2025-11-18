@@ -56,17 +56,11 @@ jobs:
           REPO_URL: ${{ github.event.pull_request.head.repo.html_url }}
         run: node process.js
 
-      - name: 💾 Commit automático para a branch do PR
-        run: |
-          git config user.name "github-actions"
-          git config user.email "actions@github.com"
-          git add badges.json badges/ certificados/
-          git commit -m "Badge e certificado criados automaticamente para ${{ github.actor }}" || echo "Nenhuma alteração para commit"
-
-          # Push seguro para branch do PR (corrige detached HEAD)
-          git push origin HEAD:${{ github.event.pull_request.head.ref }}
-
-      - name: 🔁 AutoMerge PR
-        uses: pascalgn/automerge-action@v0.16.3
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: 📬 Subir arquivos via API (compatível com fork)
+        uses: peter-evans/create-pull-request@v6
+        with:
+          commit-message: "Badge e certificado gerados para ${{ github.actor }}"
+          branch: "auto-badges/${{ github.actor }}"
+          base: ${{ github.event.pull_request.head.ref }}
+          title: "Atualização automática de badges"
+          token: ${{ secrets.GITHUB_TOKEN }}
