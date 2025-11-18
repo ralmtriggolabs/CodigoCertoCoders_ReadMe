@@ -2,16 +2,21 @@ name: Registrar Badges e Criar Certificados
 
 on:
   pull_request:
-    types: [closed]
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: write
+  pull-requests: write
 
 jobs:
   process-badge:
-    if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
 
     steps:
       - name: 📥 Checkout
         uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
 
       - name: 🧰 Instalar Node
         uses: actions/setup-node@v4
@@ -19,8 +24,7 @@ jobs:
           node-version: 18
 
       - name: 📦 Instalar dependências
-        run: |
-          npm install svg-builder@0.0.3
+        run: npm install svg-builder@0.0.3
 
       - name: 📝 Criar script de automação
         run: |
@@ -28,22 +32,44 @@ jobs:
           const fs = require('fs');
           const builder = require('svg-builder');
 
+          // Garantir estrutura inicial do badges.json
+          function loadBadges() {
+            try {
+              const raw = fs.readFileSync('badges.json', 'utf8').trim();
+
+              if (!raw) throw new Error("Empty file");
+
+              return JSON.parse(raw);
+
+            } catch (err) {
+              // Se der erro ou estiver vazio → recria o JSON
+              const defaultData = {
+                mestreDaDocumentacao: [],
+                devApoiaDev: []
+              };
+
+              fs.writeFileSync('badges.json', JSON.stringify(defaultData, null, 2));
+              return defaultData;
+            }
+          }
+
           const badgeType = process.env.BADGE_TYPE;
           const githubUser = process.env.PR_USER;
           const repository = process.env.REPO_URL;
-          const name = process.env.PR_USER; // Pode ser substituído por captura no PR
+          const name = githubUser;
           const date = new Date().toISOString().split('T')[0];
 
-          const badges = JSON.parse(fs.readFileSync('badges.json'));
+          // Carregar JSON seguro
+          const badges = loadBadges();
 
-          // Atualizar JSON
+          // Atualizar JSON com o novo registro
           if (badgeType === "mestre") {
             badges.mestreDaDocumentacao.push({
               githubUser, name, repository, date
             });
           } else {
             badges.devApoiaDev.push({
-              githubUser, name, indicatedUser: "", indicatedRepository: "", date
+              githubUser, name, date
             });
           }
 
@@ -68,8 +94,8 @@ jobs:
           // Criar certificado individual
           const tplPath =
             badgeType === "mestre"
-            ? "templates/MestreDaDocumentacao.md"
-            : "templates/DevApoiaDev.md";
+              ? "templates/MestreDaDocumentacao.md"
+              : "templates/DevApoiaDev.md";
 
           let template = fs.readFileSync(tplPath, "utf8");
 
@@ -77,16 +103,15 @@ jobs:
             .replace(/{{githubUser}}/g, githubUser)
             .replace(/{{name}}/g, name)
             .replace(/{{repository}}/g, repository)
-            .replace(/{{date}}/g, date)
-            .replace(/{{indicatedUser}}/g, "N/A")
-            .replace(/{{indicatedRepository}}/g, "N/A");
+            .replace(/{{date}}/g, date);
 
           const certFilename =
             badgeType === "mestre"
-            ? `certificados/${githubUser}-MestreDaDocumentacao.md`
-            : `certificados/${githubUser}-DevApoiaDev.md`;
+              ? `certificados/${githubUser}-MestreDaDocumentacao.md`
+              : `certificados/${githubUser}-DevApoiaDev.md`;
 
           fs.writeFileSync(certFilename, template);
+
           EOF
 
       - name: 🧠 Identificar tipo de badge pela branch
@@ -109,5 +134,10 @@ jobs:
           git config user.name "github-actions"
           git config user.email "actions@github.com"
           git add badges.json badges/ certificados/
-          git commit -m "Certificado e badge criados para ${{ github.actor }}"
+          git commit -m "Certificado e badge criados para ${{ github.actor }}" || echo "Nada para commit"
           git push
+
+      - name: 🔁 AutoMerge PR
+        uses: pascalgn/automerge-action@v0.16.3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
