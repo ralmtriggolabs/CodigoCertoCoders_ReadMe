@@ -31,10 +31,8 @@ jobs:
           echo "Título detectado: $TITLE"
 
           if [[ "$TITLE" == *"[mestre]"* ]]; then
-            echo "BADGE_TYPE=mestre" >> $GITHUB_ENV
             echo "badge_type=mestre" >> $GITHUB_OUTPUT
           elif [[ "$TITLE" == *"[apoia]"* ]]; then
-            echo "BADGE_TYPE=apoia" >> $GITHUB_ENV
             echo "badge_type=apoia" >> $GITHUB_OUTPUT
           else
             echo "❌ ERRO: O PR precisa conter [mestre] ou [apoia] no título."
@@ -45,145 +43,145 @@ jobs:
         run: |
           mkdir -p badges certificados templates
 
-          # Criar templates se não existirem
+          # Templates (se preferir, coloque esses arquivos diretamente no repositório para evitar indentação)
           if [ ! -f "templates/MestreDaDocumentacao.md" ]; then
-            mkdir -p templates
-            cat > templates/MestreDaDocumentacao.md << 'TEMPLATE'
-          # Certificado Mestre da Documentação
-          
-          **Usuário:** {{githubUser}}
-          **Nome:** {{name}}
-          **Repositório:** {{repository}}
-          **Data:** {{date}}
-          
-          Parabéns por contribuir com a documentação!
-          TEMPLATE
+cat > templates/MestreDaDocumentacao.md <<'TEMPLATE'
+# Certificado Mestre da Documentação
+
+**Usuário:** {{githubUser}}
+**Nome:** {{name}}
+**Repositório:** {{repository}}
+**Data:** {{date}}
+
+Parabéns por contribuir com a documentação!
+TEMPLATE
           fi
 
           if [ ! -f "templates/DevApoiaDev.md" ]; then
-            cat > templates/DevApoiaDev.md << 'TEMPLATE'
-          # Certificado Dev que Apoia Dev
-          
-          **Usuário:** {{githubUser}}
-          **Nome:** {{name}}
-          **Repositório:** {{repository}}
-          **Data:** {{date}}
-          
-          Obrigado por apoiar outros desenvolvedores!
-          TEMPLATE
+cat > templates/DevApoiaDev.md <<'TEMPLATE'
+# Certificado Dev que Apoia Dev
+
+**Usuário:** {{githubUser}}
+**Nome:** {{name}}
+**Repositório:** {{repository}}
+**Data:** {{date}}
+
+Obrigado por apoiar outros desenvolvedores!
+TEMPLATE
           fi
 
-          cat << 'EOF' > process.js
-          const fs = require('fs');
-          const path = require('path');
+          cat > process.js <<'EOF'
+const fs = require('fs');
 
-          // Garantir que diretórios existam
-          function ensureDirectories() {
-            const dirs = ['badges', 'certificados', 'templates'];
-            dirs.forEach(dir => {
-              if (!fs.existsSync(dir)) {
-                fs.mkdirSync(dir, { recursive: true });
-              }
-            });
-          }
+function ensureDirectories() {
+  const dirs = ['badges', 'certificados', 'templates'];
+  dirs.forEach(dir => {
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+  });
+}
 
-          // Garantir estrutura inicial do badges.json
-          function loadBadges() {
-            try {
-              if (fs.existsSync('badges.json')) {
-                const raw = fs.readFileSync('badges.json', 'utf8').trim();
-                if (raw) {
-                  return JSON.parse(raw);
-                }
-              }
-            } catch (err) {
-              console.log('Erro ao ler badges.json, criando novo:', err.message);
-            }
-            
-            const defaultData = {
-              mestreDaDocumentacao: [],
-              devApoiaDev: []
-            };
-            fs.writeFileSync('badges.json', JSON.stringify(defaultData, null, 2));
-            return defaultData;
-          }
+function loadBadges() {
+  try {
+    if (fs.existsSync('badges.json')) {
+      const raw = fs.readFileSync('badges.json', 'utf8').trim();
+      if (raw) {
+        return JSON.parse(raw);
+      }
+    }
+  } catch (err) {
+    console.log('Erro ao ler badges.json, criando novo:', err.message);
+  }
 
-          function main() {
-            ensureDirectories();
-            
-            const badgeType = process.env.BADGE_TYPE; 
-            const githubUser = process.env.PR_USER;
-            const repository = process.env.REPO_URL;
-            const name = githubUser;
-            const date = new Date().toISOString().split('T')[0];
+  const defaultData = {
+    mestreDaDocumentacao: [],
+    devApoiaDev: []
+  };
+  fs.writeFileSync('badges.json', JSON.stringify(defaultData, null, 2));
+  return defaultData;
+}
 
-            console.log(`Processando badge: ${badgeType} para ${githubUser}`);
+function sanitizeName(name) {
+  if (!name) return 'unknown';
+  return name.replace(/[^a-z0-9_.-]/gi, '-').toLowerCase();
+}
 
-            const badges = loadBadges();
+function main() {
+  ensureDirectories();
 
-            // Verificar se usuário já tem o badge
-            const badgeList = badgeType === "mestre" ? badges.mestreDaDocumentacao : badges.devApoiaDev;
-            const alreadyHasBadge = badgeList.some(entry => entry.githubUser === githubUser);
-            
-            if (!alreadyHasBadge) {
-              if (badgeType === "mestre") {
-                badges.mestreDaDocumentacao.push({ githubUser, name, repository, date });
-              } else {
-                badges.devApoiaDev.push({ githubUser, name, repository, date });
-              }
+  const badgeType = process.env.BADGE_TYPE;
+  const githubUserRaw = process.env.PR_USER;
+  const repository = process.env.REPO_URL || '';
+  const githubUser = sanitizeName(githubUserRaw);
+  const name = githubUserRaw || githubUser;
+  const date = new Date().toISOString().split('T')[0];
 
-              fs.writeFileSync('badges.json', JSON.stringify(badges, null, 2));
-              console.log('Badge registrado com sucesso!');
-            } else {
-              console.log('Usuário já possui este badge');
-            }
+  if (!badgeType) {
+    console.error('BADGE_TYPE não definido. Abortando.');
+    process.exit(1);
+  }
 
-            // Criar badge SVG
-            const badgeLabel = badgeType === "mestre"
-              ? "Mestre da Documentação"
-              : "Dev que Apoia Dev";
+  console.log(`Processando badge: ${badgeType} para ${githubUserRaw} (sanitizado: ${githubUser})`);
 
-            const svgContent = 
-              '<svg width="420" height="100" xmlns="http://www.w3.org/2000/svg">' +
-              '<rect width="420" height="100" fill="#1e1e1e" rx="12"></rect>' +
-              '<text x="210" y="55" font-size="20" fill="white" font-family="Arial, sans-serif" text-anchor="middle" alignment-baseline="middle">' +
-              badgeLabel +
-              '</text></svg>';
+  const badges = loadBadges();
 
-            const svgFilename = `badges/${githubUser}-${badgeType}.svg`;
-            fs.writeFileSync(svgFilename, svgContent);
-            console.log(`Badge SVG criado: ${svgFilename}`);
+  const badgeList = badgeType === "mestre" ? badges.mestreDaDocumentacao : badges.devApoiaDev;
+  const alreadyHasBadge = badgeList.some(entry => entry.githubUser === githubUser);
 
-            // Criar certificado .md
-            const tplPath = badgeType === "mestre"
-              ? "templates/MestreDaDocumentacao.md"
-              : "templates/DevApoiaDev.md";
+  if (!alreadyHasBadge) {
+    const entry = { githubUser, name, repository, date };
+    if (badgeType === "mestre") {
+      badges.mestreDaDocumentacao.push(entry);
+    } else {
+      badges.devApoiaDev.push(entry);
+    }
+    fs.writeFileSync('badges.json', JSON.stringify(badges, null, 2));
+    console.log('Badge registrado com sucesso!');
+  } else {
+    console.log('Usuário já possui este badge');
+  }
 
-            if (fs.existsSync(tplPath)) {
-              let template = fs.readFileSync(tplPath, "utf8");
+  const badgeLabel = badgeType === "mestre" ? "Mestre da Documentação" : "Dev que Apoia Dev";
 
-              template = template
-                .replace(/{{githubUser}}/g, githubUser)
-                .replace(/{{name}}/g, name)
-                .replace(/{{repository}}/g, repository)
-                .replace(/{{date}}/g, date);
+  const svgContent =
+    '<svg width="420" height="100" xmlns="http://www.w3.org/2000/svg">' +
+    '<rect width="420" height="100" fill="#1e1e1e" rx="12"></rect>' +
+    '<text x="210" y="55" font-size="20" fill="white" font-family="Arial, sans-serif" text-anchor="middle" alignment-baseline="middle">' +
+    badgeLabel +
+    '</text></svg>';
 
-              const certFilename = `certificados/${githubUser}-${badgeType === "mestre" ? 'MestreDaDocumentacao' : 'DevApoiaDev'}.md`;
-              
-              fs.writeFileSync(certFilename, template);
-              console.log(`Certificado criado: ${certFilename}`);
-            } else {
-              console.warn(`Template não encontrado: ${tplPath}`);
-            }
-          }
+  const svgFilename = `badges/${githubUser}-${badgeType}.svg`;
+  fs.writeFileSync(svgFilename, svgContent);
+  console.log(`Badge SVG criado: ${svgFilename}`);
 
-          main();
-          EOF
+  const tplPath = badgeType === "mestre" ? "templates/MestreDaDocumentacao.md" : "templates/DevApoiaDev.md";
+
+  if (fs.existsSync(tplPath)) {
+    let template = fs.readFileSync(tplPath, "utf8");
+
+    template = template
+      .replace(/{{githubUser}}/g, githubUserRaw || githubUser)
+      .replace(/{{name}}/g, name)
+      .replace(/{{repository}}/g, repository)
+      .replace(/{{date}}/g, date);
+
+    const certFilename = `certificados/${githubUser}-${badgeType === "mestre" ? 'MestreDaDocumentacao' : 'DevApoiaDev'}.md`;
+
+    fs.writeFileSync(certFilename, template);
+    console.log(`Certificado criado: ${certFilename}`);
+  } else {
+    console.warn(`Template não encontrado: ${tplPath}`);
+  }
+}
+
+main();
+EOF
 
       - name: 🚀 Executar automação
         env:
           PR_USER: ${{ github.actor }}
-          BADGE_TYPE: ${{ env.BADGE_TYPE }}
+          BADGE_TYPE: ${{ steps.badge-detector.outputs.badge_type }}
           REPO_URL: ${{ github.event.repository.html_url }}
         run: node process.js
 
@@ -192,18 +190,26 @@ jobs:
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          
-          # Verificar se há mudanças
-          git add badges.json badges/ certificados/
-          
+
+          # Adicionar alterações
+          git add -A
+
+          # Se não houver mudanças, sair
           if git diff --staged --quiet; then
             echo "changes=false" >> $GITHUB_OUTPUT
             echo "⚠️ Nenhuma alteração para commitar"
-          else
+            exit 0
+          fi
+
+          git commit -m "🎉 Badge e certificado criados para ${{ github.actor }} [skip ci]" || echo "Sem mudanças para commitar"
+          # Tentar push; se falhar, mostrar instrução (ex.: PR de fork pode impedir push)
+          if git push; then
             echo "changes=true" >> $GITHUB_OUTPUT
-            git commit -m "🎉 Badge e certificado criados para ${{ github.actor }} [skip ci]"
-            git push
             echo "✅ Alterações commitadas e pushedas"
+          else
+            echo "changes=false" >> $GITHUB_OUTPUT
+            echo "::warning::Falha ao dar push. Se este PR for de um fork, o workflow não tem permissão para push na branch do fork."
+            exit 0
           fi
 
       - name: 🔁 AutoMerge PR (Opcional)
